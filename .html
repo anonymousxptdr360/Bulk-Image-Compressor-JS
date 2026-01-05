@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compresseur d'Images (PNG &amp; JPG) - Multi-fichiers</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    
+    <style>
+        /* Style pour une transition douce des éléments */
+        .transition-all {
+            transition: all 0.3s ease-in-out;
+        }
+        /* Style pour le conteneur de glisser-déposer */
+        .drop-zone {
+            border: 2px dashed #cbd5e1;
+            border-radius: 0.5rem;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+        }
+        .drop-zone.dragover {
+            border-color: #4f46e5;
+            background-color: #e0e7ff;
+        }
+        /* Style pour l'indicateur de chargement */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4f46e5;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-4xl bg-white rounded-xl shadow-lg p-6 md:p-8">
+        
+        <div class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-slate-800">Compresseur d'Images</h1>
+            <p class="text-slate-500 mt-2">Réduisez la taille de vos fichiers PNG et JPG en masse.</p>
+        </div>
+
+        <div id="upload-box">
+            <div id="drop-zone" class="drop-zone">
+                <p class="text-slate-600">Glissez-déposez des images ici ou</p>
+                <button onclick="document.getElementById('file-input').click()" class="mt-4 bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 transition-all">
+                    Sélectionner des fichiers
+                </button>
+            </div>
+            <input type="file" id="file-input" class="hidden" accept="image/png, image/jpeg" multiple="">
+        </div>
+
+        <div id="main-interface" class="hidden">
+            <div class="bg-slate-50 p-4 rounded-lg mb-6">
+                <h2 class="text-lg font-semibold text-slate-700 mb-3">Réglages de Compression</h2>
+                <div class="flex flex-col md:flex-row items-center gap-4">
+                    <label for="quality-slider" class="font-medium text-slate-600">Qualité Globale : <span id="quality-value" class="font-bold text-indigo-600">80</span>%</label>
+                    <input id="quality-slider" type="range" min="10" max="100" value="80" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer">
+                </div>
+                 <p class="text-xs text-slate-500 mt-2">Note : Les images PNG avec transparence seront converties en JPG avec un fond blanc.</p>
+            </div>
+
+            <div id="image-list" class="space-y-4 mb-6 max-h-96 overflow-y-auto pr-2">
+                </div>
+
+            <div id="action-buttons" class="flex flex-col md:flex-row justify-center items-center gap-4">
+                 <button id="compress-all-btn" class="w-full md:w-auto bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-indigo-700 transition-all text-lg flex items-center justify-center gap-2">
+                    Compresser Tout
+                </button>
+                <button id="download-all-btn" class="w-full md:w-auto bg-emerald-500 text-white font-bold py-3 px-6 rounded-lg hover:bg-emerald-600 transition-all text-center text-lg hidden">
+                    Télécharger Tout (ZIP)
+                </button>
+                <button id="reset-btn" class="w-full md:w-auto bg-slate-500 text-white font-bold py-3 px-6 rounded-lg hover:bg-slate-600 transition-all text-lg">
+                    Recommencer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('file-input');
+        const uploadBox = document.getElementById('upload-box');
+        const mainInterface = document.getElementById('main-interface');
+        const dropZone = document.getElementById('drop-zone');
+        const imageList = document.getElementById('image-list');
+        const qualitySlider = document.getElementById('quality-slider');
+        const qualityValue = document.getElementById('quality-value');
+        const compressAllBtn = document.getElementById('compress-all-btn');
+        const downloadAllBtn = document.getElementById('download-all-btn');
+        const resetBtn = document.getElementById('reset-btn');
+
+        let filesToProcess = [];
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+        
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        function handleFiles(files) {
+            const validFiles = Array.from(files).filter(file => file.type === 'image/jpeg' || file.type === 'image/png');
+            if (validFiles.length === 0) {
+                alert("Veuillez sélectionner des fichiers PNG ou JPG.");
+                return;
+            }
+
+            filesToProcess = validFiles.map((file, index) => ({
+                id: `image-${Date.now()}-${index}`,
+                file: file,
+                compressedData: null
+            }));
+
+            renderImageList();
+            uploadBox.classList.add('hidden');
+            mainInterface.classList.remove('hidden');
+            downloadAllBtn.classList.add('hidden');
+            compressAllBtn.disabled = false;
+        }
+
+        function renderImageList() {
+            imageList.innerHTML = '';
+            filesToProcess.forEach(item => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const html = `
+                        <div id="${item.id}" class="flex items-center gap-4 p-3 bg-white border border-slate-200 rounded-lg">
+                            <img src="${e.target.result}" class="w-16 h-16 object-cover rounded-md"/>
+                            <div class="flex-grow">
+                                <p class="font-semibold text-slate-800 truncate">${item.file.name}</p>
+                                <p class="text-sm text-slate-500">${formatFileSize(item.file.size)}</p>
+                            </div>
+                            <div class="status-indicator text-right w-40">
+                                <p class="text-slate-500">En attente...</p>
+                            </div>
+                        </div>
+                    `;
+                    imageList.insertAdjacentHTML('beforeend', html);
+                };
+                reader.readAsDataURL(item.file);
+            });
+        }
+
+        qualitySlider.addEventListener('input', (e) => {
+            qualityValue.textContent = e.target.value;
+        });
+
+        function compressFile(file) {
+            return new Promise((resolve, reject) => {
+                const quality = parseInt(qualitySlider.value) / 100;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.src = e.target.result;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.fillStyle = "#FFFFFF";
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(img, 0, 0);
+                        canvas.toBlob(blob => {
+                            resolve(blob);
+                        }, 'image/jpeg', quality);
+                    };
+                    img.onerror = reject;
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+        
+        compressAllBtn.addEventListener('click', async () => {
+            compressAllBtn.disabled = true;
+            compressAllBtn.innerHTML = '<div class="loader"></div><span>Compression...</span>';
+            
+            for (const item of filesToProcess) {
+                const itemEl = document.getElementById(item.id);
+                const statusEl = itemEl.querySelector('.status-indicator');
+                statusEl.innerHTML = '<div class="loader mx-auto"></div>';
+
+                try {
+                    const compressedBlob = await compressFile(item.file);
+                    item.compressedData = compressedBlob;
+                    
+                    const reduction = 100 - (compressedBlob.size / item.file.size) * 100;
+                    statusEl.innerHTML = `
+                        <p class="font-semibold text-emerald-600">${formatFileSize(compressedBlob.size)}</p>
+                        <p class="text-sm text-emerald-500">${reduction.toFixed(1)}% réduit</p>
+                    `;
+                } catch (error) {
+                    console.error("Erreur de compression:", error);
+                    statusEl.innerHTML = `<p class="text-red-500 font-semibold">Échec</p>`;
+                }
+            }
+
+            compressAllBtn.innerHTML = 'Compresser Tout';
+            downloadAllBtn.classList.remove('hidden');
+        });
+        
+        downloadAllBtn.addEventListener('click', () => {
+            const zip = new JSZip();
+            filesToProcess.forEach(item => {
+                if(item.compressedData) {
+                    const newName = `${item.file.name.split('.').slice(0, -1).join('.')}.jpg`;
+                    zip.file(newName, item.compressedData);
+                }
+            });
+
+            zip.generateAsync({ type: "blob" })
+                .then(function(content) {
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(content);
+                    link.download = "images-compressees.zip";
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                });
+        });
+
+        resetBtn.addEventListener('click', () => {
+             fileInput.value = '';
+             mainInterface.classList.add('hidden');
+             uploadBox.classList.remove('hidden');
+             imageList.innerHTML = '';
+             filesToProcess = [];
+        });
+    </script>
+</body>
+</html>
