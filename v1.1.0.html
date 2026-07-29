@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Compressor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: ['selector', '[data-theme="dark"]'],
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    animation: {
+                        'fade-in': 'fadeIn 0.6s ease-out forwards',
+                        'slide-up': 'slideUp 0.5s ease-out forwards',
+                        'slide-down': 'slideDown 0.4s ease-out forwards',
+                        'scale-in': 'scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards',
+                        'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
+                        'bounce-gentle': 'bounceGentle 1s ease-in-out infinite',
+                        'shimmer': 'shimmer 2s linear infinite',
+                        'float': 'float 3s ease-in-out infinite',
+                        'wiggle': 'wiggle 0.5s ease-in-out',
+                        'glow': 'glow 2s ease-in-out infinite alternate',
+                        'spin-slow': 'spin 2s linear infinite',
+                    },
+                    keyframes: {
+                        fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+                        slideUp: { '0%': { opacity: '0', transform: 'translateY(30px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+                        slideDown: { '0%': { opacity: '0', transform: 'translateY(-20px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+                        scaleIn: { '0%': { opacity: '0', transform: 'scale(0.8)' }, '100%': { opacity: '1', transform: 'scale(1)' } },
+                        pulseSoft: { '0%, 100%': { opacity: '1' }, '50%': { opacity: '0.7' } },
+                        bounceGentle: { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-5px)' } },
+                        shimmer: { '0%': { backgroundPosition: '-200% 0' }, '100%': { backgroundPosition: '200% 0' } },
+                        float: { '0%, 100%': { transform: 'translateY(0px)' }, '50%': { transform: 'translateY(-10px)' } },
+                        wiggle: { '0%, 100%': { transform: 'rotate(0deg)' }, '25%': { transform: 'rotate(-3deg)' }, '75%': { transform: 'rotate(3deg)' } },
+                        glow: { '0%': { boxShadow: '0 0 5px rgba(99, 102, 241, 0.3)' }, '100%': { boxShadow: '0 0 20px rgba(99, 102, 241, 0.6)' } },
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease; }
+        body { font-family: 'Inter', sans-serif; }
+        .drop-zone { border: 3px dashed; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .drop-zone:hover { transform: scale(1.02); }
+        .drop-zone.dragover { transform: scale(1.05); border-style: solid; }
+        .card-hover { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 40px rgba(0,0,0,0.1); }
+        input[type="range"] { -webkit-appearance: none; appearance: none; height: 8px; border-radius: 4px; outline: none; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 22px; height: 22px; border-radius: 50%; background: #6366f1; cursor: pointer; box-shadow: 0 2px 8px rgba(99,102,241,0.4); transition: transform 0.2s; }
+        input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+        .stagger-1 { animation-delay: 0.1s; opacity: 0; }
+        .stagger-2 { animation-delay: 0.2s; opacity: 0; }
+        .stagger-3 { animation-delay: 0.3s; opacity: 0; }
+        .format-card { transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .format-card:hover { transform: scale(1.05); }
+        .format-card.selected { transform: scale(1.05); }
+        .theme-btn { transition: all 0.2s ease; }
+        .theme-btn:hover { transform: scale(1.1); }
+        .theme-btn.active { transform: scale(1.15); }
+        .lang-btn { transition: all 0.2s ease; }
+        .lang-btn:hover { transform: scale(1.1); }
+        .lang-btn.active { transform: scale(1.15); }
+        .progress-bar { background: linear-gradient(90deg, #6366f1, #8b5cf6, #6366f1); background-size: 200% 100%; animation: shimmer 1.5s linear infinite; }
+        .glass { backdrop-filter: blur(10px); }
+        .image-item { animation: slideUp 0.4s ease-out forwards; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950 flex items-center justify-center">
+
+    <div class="fixed top-4 right-4 z-50 flex items-center gap-3 animate-slide-down">
+        <div class="flex items-center gap-1 bg-white/80 dark:bg-slate-800/80 glass rounded-full p-1.5 shadow-lg">
+            <button onclick="setLang('fr')" id="lang-fr" class="lang-btn active w-9 h-9 rounded-full flex items-center justify-center text-lg" title="Français">🇫🇷</button>
+            <button onclick="setLang('en')" id="lang-en" class="lang-btn w-9 h-9 rounded-full flex items-center justify-center text-lg" title="English">🇬🇧</button>
+        </div>
+        <div class="flex items-center gap-1 bg-white/80 dark:bg-slate-800/80 glass rounded-full p-1.5 shadow-lg">
+            <button onclick="setTheme('light')" id="theme-light" class="theme-btn active w-9 h-9 rounded-full flex items-center justify-center text-lg" title="Light">☀️</button>
+            <button onclick="setTheme('dark')" id="theme-dark" class="theme-btn w-9 h-9 rounded-full flex items-center justify-center text-lg" title="Dark">🌙</button>
+            <button onclick="setTheme('auto')" id="theme-auto" class="theme-btn w-9 h-9 rounded-full flex items-center justify-center text-lg" title="Auto">🖥️</button>
+        </div>
+    </div>
+
+    <div class="w-full max-w-5xl animate-scale-in">
+        <div class="bg-white/90 dark:bg-slate-900/90 glass rounded-3xl shadow-2xl p-6 md:p-10 border border-slate-200/50 dark:border-slate-700/50">
+
+            <div class="text-center mb-10 animate-fade-in">
+                <div class="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl mb-4 animate-float shadow-lg shadow-indigo-500/30">
+                    <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                </div>
+                <h1 class="text-4xl md:text-5xl font-black bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent" data-i18n="title">Compresseur d'Images</h1>
+                <p class="text-slate-500 dark:text-slate-400 mt-3 text-lg" data-i18n="subtitle">Réduisez la taille de vos fichiers PNG et JPG en masse, simplement.</p>
+            </div>
+
+            <div id="upload-box" class="animate-slide-up">
+                <div id="drop-zone" class="drop-zone border-slate-300 dark:border-slate-600 rounded-2xl p-10 md:p-16 text-center cursor-pointer bg-slate-50/50 dark:bg-slate-800/50 hover:border-indigo-400 dark:hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20">
+                    <div class="animate-bounce-gentle inline-block mb-4">
+                        <svg class="w-16 h-16 mx-auto text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                    </div>
+                    <p class="text-xl font-semibold text-slate-700 dark:text-slate-200" data-i18n="dropText">Glissez-déposez vos images ici</p>
+                    <p class="text-slate-400 dark:text-slate-500 mt-2" data-i18n="dropSubtext">ou cliquez pour parcourir vos fichiers</p>
+                    <button onclick="document.getElementById('file-input').click()" class="mt-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold py-3 px-8 rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:shadow-indigo-500/40 hover:-translate-y-0.5 active:translate-y-0">
+                        <span data-i18n="selectFiles">📁 Sélectionner des fichiers</span>
+                    </button>
+                    <p class="text-xs text-slate-400 dark:text-slate-500 mt-4" data-i18n="acceptedFormats">Formats acceptés : PNG, JPG, JPEG, WebP, GIF, BMP</p>
+                </div>
+                <input type="file" id="file-input" class="hidden" accept="image/*" multiple>
+            </div>
+
+            <div id="main-interface" class="hidden">
+
+                <div class="bg-gradient-to-r from-slate-50 to-indigo-50/50 dark:from-slate-800 dark:to-indigo-900/20 p-6 rounded-2xl mb-8 border border-slate-200/50 dark:border-slate-700/50 animate-slide-up stagger-1">
+                    <h2 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-5 flex items-center gap-2">
+                        <span class="text-2xl">⚙️</span>
+                        <span data-i18n="settingsTitle">Réglages de Compression</span>
+                    </h2>
+
+                    <div class="mb-6">
+                        <label class="font-semibold text-slate-700 dark:text-slate-200 mb-3 block" data-i18n="outputFormat">Format de sortie :</label>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div onclick="selectFormat('jpeg')" id="format-jpeg" class="format-card cursor-pointer p-4 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-center hover:border-indigo-300 relative">
+                                <div class="text-3xl mb-2">🖼️</div>
+                                <p class="font-bold text-slate-700 dark:text-slate-200">JPG</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1" data-i18n="jpgDesc">Meilleur ratio taille/qualité. Idéal pour photos. Pas de transparence.</p>
+                            </div>
+                            <div onclick="selectFormat('png')" id="format-png" class="format-card cursor-pointer p-4 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-center hover:border-indigo-300 relative">
+                                <div class="text-3xl mb-2">✨</div>
+                                <p class="font-bold text-slate-700 dark:text-slate-200">PNG</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1" data-i18n="pngDesc">Conserve la transparence. Fichiers plus lourds. Idéal pour logos/icônes.</p>
+                            </div>
+                            <div onclick="selectFormat('webp')" id="format-webp" class="format-card selected cursor-pointer p-4 rounded-xl border-2 border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-center shadow-md relative">
+                                <span class="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-md whitespace-nowrap" data-i18n="defaultBadge">⭐ PAR DÉFAUT</span>
+                                <div class="text-3xl mb-2">🚀</div>
+                                <p class="font-bold text-indigo-700 dark:text-indigo-300">WebP</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1" data-i18n="webpDesc">Format moderne. ~30% plus léger que JPG. Transparence supportée.</p>
+                            </div>
+                        </div>
+                        <div class="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
+                            <p class="text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2">
+                                <span class="text-sm">💡</span>
+                                <span data-i18n="formatTip">Le WebP est sélectionné par défaut : c'est le meilleur choix dans presque tous les cas (~30% plus léger que le JPG, transparence incluse). Choisissez JPG uniquement pour une compatibilité maximale avec les très anciens logiciels.</span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <label for="quality-slider" class="font-semibold text-slate-700 dark:text-slate-200" data-i18n="qualityLabel">Qualité de compression</label>
+                            <span id="quality-value" class="font-black text-2xl text-indigo-600 dark:text-indigo-400">80%</span>
+                        </div>
+                        <input id="quality-slider" type="range" min="10" max="100" value="80" class="w-full bg-slate-200 dark:bg-slate-700 rounded-lg cursor-pointer">
+                        <div class="flex justify-between text-xs text-slate-400 mt-1">
+                            <span data-i18n="smallFile">📦 Fichier léger</span>
+                            <span data-i18n="bestQuality">💎 Qualité max</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+                        <p class="text-xs text-blue-700 dark:text-blue-300 flex items-start gap-2">
+                            <span class="text-sm">ℹ️</span>
+                            <span data-i18n="qualityTip">Une qualité de 70-85% offre un excellent compromis. En dessous de 50%, des artefacts visuels apparaissent. Au-dessus de 90%, le gain de taille est minime.</span>
+                        </p>
+                    </div>
+                </div>
+
+                <div id="image-list" class="space-y-3 mb-8 max-h-[500px] overflow-y-auto pr-2"></div>
+
+                <div id="global-progress" class="hidden mb-6">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm font-semibold text-slate-600 dark:text-slate-300" data-i18n="compressing">Compression en cours...</span>
+                        <span id="progress-text" class="text-sm font-bold text-indigo-600 dark:text-indigo-400">0%</span>
+                    </div>
+                    <div class="w-full h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div id="progress-bar" class="progress-bar h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <div id="action-buttons" class="flex flex-col md:flex-row justify-center items-center gap-4 animate-slide-up stagger-3">
+                    <button id="compress-all-btn" class="w-full md:w-auto bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold py-4 px-10 rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all text-lg flex items-center justify-center gap-3 shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0">
+                        <span>⚡</span>
+                        <span data-i18n="compressAll">Compresser Tout</span>
+                    </button>
+                    <button id="download-all-btn" class="w-full md:w-auto bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold py-4 px-10 rounded-xl hover:from-emerald-600 hover:to-teal-600 transition-all text-lg hidden items-center justify-center gap-3 shadow-lg shadow-emerald-500/30 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0">
+                        <span>📥</span>
+                        <span data-i18n="downloadAll">Télécharger Tout (ZIP)</span>
+                    </button>
+                    <button id="reset-btn" class="w-full md:w-auto bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold py-4 px-10 rounded-xl hover:bg-slate-300 dark:hover:bg-slate-600 transition-all text-lg hover:-translate-y-0.5 active:translate-y-0">
+                        <span data-i18n="reset">🔄 Recommencer</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <p class="text-center text-xs text-slate-400 dark:text-slate-600 mt-6 animate-fade-in" data-i18n="footer">100% local — Vos images ne quittent jamais votre navigateur. 🔒</p>
+    </div>
+
+    <script>
+        const translations = {
+            fr: {
+                title: "Compresseur d'Images",
+                subtitle: "Réduisez la taille de vos fichiers PNG et JPG en masse, simplement.",
+                dropText: "Glissez-déposez vos images ici",
+                dropSubtext: "ou cliquez pour parcourir vos fichiers",
+                selectFiles: "📁 Sélectionner des fichiers",
+                acceptedFormats: "Formats acceptés : PNG, JPG, JPEG, WebP, GIF, BMP",
+                settingsTitle: "Réglages de Compression",
+                outputFormat: "Format de sortie :",
+                jpgDesc: "Meilleur ratio taille/qualité. Idéal pour photos. Pas de transparence.",
+                pngDesc: "Conserve la transparence. Fichiers plus lourds. Idéal pour logos/icônes.",
+                webpDesc: "Format moderne. ~30% plus léger que JPG. Transparence supportée.",
+                defaultBadge: "⭐ PAR DÉFAUT",
+                formatTip: "Le WebP est sélectionné par défaut : c'est le meilleur choix dans presque tous les cas (~30% plus léger que le JPG, transparence incluse). Choisissez JPG uniquement pour une compatibilité maximale avec les très anciens logiciels.",
+                qualityLabel: "Qualité de compression",
+                smallFile: "📦 Fichier léger",
+                bestQuality: "💎 Qualité max",
+                qualityTip: "Une qualité de 70-85% offre un excellent compromis. En dessous de 50%, des artefacts visuels apparaissent. Au-dessus de 90%, le gain de taille est minime.",
+                compressing: "Compression en cours...",
+                compressAll: "Compresser Tout",
+                downloadAll: "Télécharger Tout (ZIP)",
+                reset: "🔄 Recommencer",
+                footer: "100% local — Vos images ne quittent jamais votre navigateur. 🔒",
+                waiting: "En attente...",
+                reduced: "réduit",
+                failedFinal: "Échec définitif",
+                invalidFiles: "Aucun fichier image valide détecté. Formats acceptés : PNG, JPG, JPEG, WebP, GIF, BMP.",
+                compressionInProgress: "Compression...",
+                done: "Terminé !"
+            },
+            en: {
+                title: "Image Compressor",
+                subtitle: "Reduce the size of your PNG and JPG files in bulk, simply.",
+                dropText: "Drag & drop your images here",
+                dropSubtext: "or click to browse your files",
+                selectFiles: "📁 Select files",
+                acceptedFormats: "Accepted formats: PNG, JPG, JPEG, WebP, GIF, BMP",
+                settingsTitle: "Compression Settings",
+                outputFormat: "Output format:",
+                jpgDesc: "Best size/quality ratio. Ideal for photos. No transparency.",
+                pngDesc: "Preserves transparency. Larger files. Ideal for logos/icons.",
+                webpDesc: "Modern format. ~30% lighter than JPG. Transparency supported.",
+                defaultBadge: "⭐ DEFAULT",
+                formatTip: "WebP is selected by default: it's the best choice in almost every case (~30% lighter than JPG, transparency included). Choose JPG only for maximum compatibility with very old software.",
+                qualityLabel: "Compression quality",
+                smallFile: "📦 Small file",
+                bestQuality: "💎 Best quality",
+                qualityTip: "A quality of 70-85% offers an excellent compromise. Below 50%, visual artifacts appear. Above 90%, the size gain is minimal.",
+                compressing: "Compressing...",
+                compressAll: "Compress All",
+                downloadAll: "Download All (ZIP)",
+                reset: "🔄 Start Over",
+                footer: "100% local — Your images never leave your browser. 🔒",
+                waiting: "Waiting...",
+                reduced: "reduced",
+                failedFinal: "Final failure",
+                invalidFiles: "No valid image file detected. Accepted formats: PNG, JPG, JPEG, WebP, GIF, BMP.",
+                compressionInProgress: "Compressing...",
+                done: "Done!"
+            }
+        };
+
+        let currentLang = 'fr';
+        let currentTheme = 'light';
+        let selectedFormat = 'webp';
+        let filesToProcess = [];
+
+        function setLang(lang) {
+            currentLang = lang;
+            document.documentElement.lang = lang;
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (translations[lang][key]) el.textContent = translations[lang][key];
+            });
+            document.getElementById('lang-fr').classList.toggle('active', lang === 'fr');
+            document.getElementById('lang-en').classList.toggle('active', lang === 'en');
+            document.getElementById('lang-fr').classList.toggle('bg-indigo-100', lang === 'fr');
+            document.getElementById('lang-en').classList.toggle('bg-indigo-100', lang === 'en');
+        }
+
+        function setTheme(theme) {
+            currentTheme = theme;
+            let actualTheme = theme;
+            if (theme === 'auto') {
+                actualTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            document.documentElement.setAttribute('data-theme', actualTheme);
+            document.getElementById('theme-light').classList.toggle('active', theme === 'light');
+            document.getElementById('theme-dark').classList.toggle('active', theme === 'dark');
+            document.getElementById('theme-auto').classList.toggle('active', theme === 'auto');
+            document.getElementById('theme-light').classList.toggle('bg-amber-100', theme === 'light');
+            document.getElementById('theme-dark').classList.toggle('bg-indigo-100', theme === 'dark');
+            document.getElementById('theme-auto').classList.toggle('bg-slate-200', theme === 'auto');
+        }
+
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+            if (currentTheme === 'auto') setTheme('auto');
+        });
+
+        function selectFormat(format) {
+            selectedFormat = format;
+            ['jpeg', 'png', 'webp'].forEach(f => {
+                const el = document.getElementById('format-' + f);
+                if (f === format) {
+                    el.classList.add('selected', 'border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/30', 'shadow-md');
+                    el.classList.remove('border-slate-200', 'dark:border-slate-600', 'bg-white', 'dark:bg-slate-800');
+                } else {
+                    el.classList.remove('selected', 'border-indigo-500', 'bg-indigo-50', 'dark:bg-indigo-900/30', 'shadow-md');
+                    el.classList.add('border-slate-200', 'dark:border-slate-600', 'bg-white', 'dark:bg-slate-800');
+                }
+            });
+        }
+
+        const fileInput = document.getElementById('file-input');
+        const uploadBox = document.getElementById('upload-box');
+        const mainInterface = document.getElementById('main-interface');
+        const dropZone = document.getElementById('drop-zone');
+        const imageList = document.getElementById('image-list');
+        const qualitySlider = document.getElementById('quality-slider');
+        const qualityValue = document.getElementById('quality-value');
+        const compressAllBtn = document.getElementById('compress-all-btn');
+        const downloadAllBtn = document.getElementById('download-all-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const globalProgress = document.getElementById('global-progress');
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover', 'border-indigo-500', 'bg-indigo-50/50', 'dark:bg-indigo-900/20');
+        });
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover', 'border-indigo-500', 'bg-indigo-50/50', 'dark:bg-indigo-900/20');
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover', 'border-indigo-500', 'bg-indigo-50/50', 'dark:bg-indigo-900/20');
+            handleFiles(e.dataTransfer.files);
+        });
+        dropZone.addEventListener('click', (e) => {
+            if (e.target.tagName !== 'BUTTON') fileInput.click();
+        });
+
+        const validImageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp', 'image/svg+xml'];
+
+        function handleFiles(files) {
+            const validFiles = Array.from(files).filter(file => validImageTypes.includes(file.type) || file.name.match(/\.(png|jpe?g|webp|gif|bmp|svg)$/i));
+            if (validFiles.length === 0) {
+                showToast(translations[currentLang].invalidFiles, 'error');
+                return;
+            }
+            filesToProcess = validFiles.map((file, index) => ({
+                id: 'img-' + Date.now() + '-' + index,
+                file: file,
+                compressedData: null,
+                order: index
+            }));
+            renderImageList();
+            uploadBox.classList.add('hidden');
+            mainInterface.classList.remove('hidden');
+            mainInterface.classList.add('animate-fade-in');
+            downloadAllBtn.classList.add('hidden');
+            downloadAllBtn.classList.remove('flex');
+            globalProgress.classList.add('hidden');
+            compressAllBtn.disabled = false;
+            compressAllBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+
+        function renderImageList() {
+            imageList.innerHTML = '';
+            filesToProcess.forEach((item, idx) => {
+                const url = URL.createObjectURL(item.file);
+                const div = document.createElement('div');
+                div.id = item.id;
+                div.className = 'image-item flex items-center gap-4 p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl card-hover shadow-sm';
+                div.style.animationDelay = (idx * 0.06) + 's';
+                div.innerHTML = `
+                    <div class="relative flex-shrink-0">
+                        <img src="${url}" class="w-16 h-16 object-cover rounded-lg shadow-sm" alt="preview" onload="URL.revokeObjectURL(this.src)"/>
+                        <span class="absolute -top-1 -right-1 w-5 h-5 bg-indigo-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">${idx + 1}</span>
+                    </div>
+                    <div class="flex-grow min-w-0">
+                        <p class="font-semibold text-slate-800 dark:text-slate-100 truncate text-sm">${item.file.name}</p>
+                        <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">${formatFileSize(item.file.size)} • ${(item.file.type.split('/')[1] || 'IMG').toUpperCase()}</p>
+                    </div>
+                    <div class="status-indicator text-right flex-shrink-0 w-36">
+                        <span class="inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-700 px-3 py-1.5 rounded-full">
+                            <span class="w-2 h-2 bg-slate-300 dark:bg-slate-500 rounded-full animate-pulse-soft"></span>
+                            ${translations[currentLang].waiting}
+                        </span>
+                    </div>
+                `;
+                imageList.appendChild(div);
+            });
+        }
+
+        qualitySlider.addEventListener('input', (e) => {
+            qualityValue.textContent = e.target.value + '%';
+        });
+
+        function compressSingleFile(file) {
+            return new Promise((resolve, reject) => {
+                const quality = parseInt(qualitySlider.value) / 100;
+                let mimeType = 'image/jpeg';
+                if (selectedFormat === 'png') mimeType = 'image/png';
+                if (selectedFormat === 'webp') mimeType = 'image/webp';
+
+                createImageBitmap(file, {
+                    premultiplyAlpha: 'none',
+                    colorSpaceConversion: 'srgb'
+                }).then(bitmap => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = bitmap.width;
+                    canvas.height = bitmap.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.imageSmoothingEnabled = true;
+                    ctx.imageSmoothingQuality = 'high';
+                    if (selectedFormat === 'jpeg') {
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    }
+                    ctx.drawImage(bitmap, 0, 0);
+                    bitmap.close();
+                    canvas.toBlob(blob => {
+                        if (blob && blob.size > 0) resolve(blob);
+                        else reject(new Error('Empty blob'));
+                    }, mimeType, selectedFormat === 'png' ? undefined : quality);
+                }).catch(() => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            canvas.width = img.naturalWidth;
+                            canvas.height = img.naturalHeight;
+                            const ctx = canvas.getContext('2d');
+                            ctx.imageSmoothingEnabled = true;
+                            ctx.imageSmoothingQuality = 'high';
+                            if (selectedFormat === 'jpeg') {
+                                ctx.fillStyle = '#FFFFFF';
+                                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                            }
+                            ctx.drawImage(img, 0, 0);
+                            canvas.toBlob(blob => {
+                                if (blob && blob.size > 0) resolve(blob);
+                                else reject(new Error('Fallback failed'));
+                            }, mimeType, selectedFormat === 'png' ? undefined : quality);
+                        };
+                        img.onerror = () => reject(new Error('Image load failed'));
+                        img.src = e.target.result;
+                    };
+                    reader.onerror = () => reject(new Error('FileReader failed'));
+                    reader.readAsDataURL(file);
+                });
+            });
+        }
+
+        async function compressBatch(items, batchSize) {
+            const results = new Array(items.length);
+            let index = 0;
+            async function worker() {
+                while (index < items.length) {
+                    const i = index++;
+                    try {
+                        results[i] = { success: true, blob: await compressSingleFile(items[i].file) };
+                    } catch (err) {
+                        results[i] = { success: false, error: err };
+                    }
+                }
+            }
+            const workers = [];
+            for (let w = 0; w < Math.min(batchSize, items.length); w++) {
+                workers.push(worker());
+            }
+            await Promise.all(workers);
+            return results;
+        }
+
+        compressAllBtn.addEventListener('click', async () => {
+            compressAllBtn.disabled = true;
+            compressAllBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            compressAllBtn.innerHTML = '<svg class="animate-spin-slow w-5 h-5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg><span>' + translations[currentLang].compressionInProgress + '</span>';
+            globalProgress.classList.remove('hidden');
+            globalProgress.classList.add('animate-fade-in');
+            progressBar.style.width = '0%';
+            progressText.textContent = '0%';
+
+            filesToProcess.forEach(item => {
+                const el = document.getElementById(item.id);
+                if (el) {
+                    const statusEl = el.querySelector('.status-indicator');
+                    if (statusEl) {
+                        statusEl.innerHTML = '<span class="inline-flex items-center gap-1 text-xs text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-full"><svg class="animate-spin-slow w-3 h-3" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>' + translations[currentLang].compressing + '</span>';
+                    }
+                }
+            });
+
+            const batchSize = Math.min(4, filesToProcess.length);
+            const results = await compressBatch(filesToProcess, batchSize);
+
+            results.forEach((result, i) => {
+                const item = filesToProcess[i];
+                const el = document.getElementById(item.id);
+                if (!el) return;
+                const statusEl = el.querySelector('.status-indicator');
+                if (result.success) {
+                    item.compressedData = result.blob;
+                    const reduction = Math.max(0, 100 - (result.blob.size / item.file.size) * 100);
+                    if (statusEl) {
+                        statusEl.innerHTML = '<div class="text-right"><p class="font-bold text-emerald-600 dark:text-emerald-400 text-sm">' + formatFileSize(result.blob.size) + '</p><p class="text-xs text-emerald-500 dark:text-emerald-400">-' + reduction.toFixed(1) + '% ' + translations[currentLang].reduced + '</p></div>';
+                    }
+                    el.classList.remove('border-slate-200', 'dark:border-slate-700');
+                    el.classList.add('border-emerald-200', 'dark:border-emerald-800');
+                } else {
+                    if (statusEl) {
+                        statusEl.innerHTML = '<span class="inline-flex items-center gap-1 text-xs text-red-500 bg-red-50 dark:bg-red-900/30 px-3 py-1.5 rounded-full">❌ ' + translations[currentLang].failedFinal + '</span>';
+                    }
+                    el.classList.remove('border-slate-200', 'dark:border-slate-700');
+                    el.classList.add('border-red-200', 'dark:border-red-800');
+                }
+            });
+
+            progressBar.style.width = '100%';
+            progressText.textContent = '100%';
+            compressAllBtn.innerHTML = '<span>⚡</span><span>' + translations[currentLang].compressAll + '</span>';
+            compressAllBtn.disabled = false;
+            compressAllBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            downloadAllBtn.classList.remove('hidden');
+            downloadAllBtn.classList.add('flex', 'animate-scale-in');
+            showToast(translations[currentLang].done, 'success');
+            setTimeout(() => { globalProgress.classList.add('hidden'); }, 1500);
+        });
+
+        downloadAllBtn.addEventListener('click', () => {
+            const zip = new JSZip();
+            let count = 0;
+            filesToProcess.forEach(item => {
+                if (item.compressedData) {
+                    const baseName = item.file.name.replace(/\.[^.]+$/, '');
+                    let ext = 'jpg';
+                    if (selectedFormat === 'png') ext = 'png';
+                    if (selectedFormat === 'webp') ext = 'webp';
+                    zip.file(baseName + '.' + ext, item.compressedData);
+                    count++;
+                }
+            });
+            if (count === 0) return;
+            zip.generateAsync({ type: 'blob' }).then(content => {
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(content);
+                link.download = 'compressed-images.zip';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(link.href);
+            });
+        });
+
+        resetBtn.addEventListener('click', () => {
+            fileInput.value = '';
+            mainInterface.classList.add('hidden');
+            uploadBox.classList.remove('hidden');
+            uploadBox.classList.add('animate-fade-in');
+            imageList.innerHTML = '';
+            filesToProcess = [];
+            globalProgress.classList.add('hidden');
+            progressBar.style.width = '0%';
+            progressText.textContent = '0%';
+            downloadAllBtn.classList.add('hidden');
+            downloadAllBtn.classList.remove('flex');
+        });
+
+        function showToast(message, type) {
+            type = type || 'info';
+            const toast = document.createElement('div');
+            const colors = type === 'error' ? 'bg-red-500' : type === 'success' ? 'bg-emerald-500' : 'bg-indigo-500';
+            toast.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 ' + colors + ' text-white px-6 py-3 rounded-xl shadow-2xl z-[9999] animate-slide-up font-medium text-sm max-w-md text-center';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(-50%) translateY(20px)';
+                toast.style.transition = 'all 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        setTheme('light');
+        setLang('fr');
+    </script>
+</body>
+</html>
