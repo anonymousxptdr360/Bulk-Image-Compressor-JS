@@ -4,7 +4,7 @@ A lightweight, fast, and secure web-based tool to compress multiple images local
 
 ## 🚀 Live Demo
 You can try the tool online here:
-👉 [https://stopbordo.odoo.com/compresseur](https://stopbordo.odoo.com/compresseur)
+👉 [https://anonymousxptdr360.github.io/Bulk-Image-Compressor-JS/v1.1.1.html](https://anonymousxptdr360.github.io/Bulk-Image-Compressor-JS/v1.1.1.html)
 
 ## ✨ Features
 * **Bulk Compression:** Upload and process multiple PNG and JPG files at once.
