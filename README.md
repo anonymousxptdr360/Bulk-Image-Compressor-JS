@@ -21,7 +21,7 @@ You can try the tool online here:
 * **JSZip** (for batch downloads)
 
 ## 💻 How to use locally
-1. Download the [`v1.0.0-image-compressor.html`](https://github.com/anonymousxptdr360/Bulk-Image-Compressor-JS/releases/tag/v1.0.0) file.
+1. Download the [`vX.X.X-image-compressor.html`](https://github.com/anonymousxptdr360/Bulk-Image-Compressor-JS/releases) file.
 2. Open it in any modern web browser (Chrome, Firefox, Edge, etc.).
 3. Drag and drop your images and start compressing!
 
